@@ -10,7 +10,8 @@
 — обычный git, и прослойки для этого не нужно.
 
     lab here <работа>      склонировать работу в папку проекта (lab-base): слаг → полный путь
-    lab pull               обновить клон, положить ключ git'у, показать открытые предложения
+    lab pull               обновить клон и вложенные репозитории (код, статья),
+                           положить ключ git'у, показать открытые предложения
     lab tasks              открытые задачи работы: кому назначены, какое утверждение
     lab take <номер>       взять задачу на себя: исполнитель и ярлык «делается»
     lab checks             что сказали проверки этому предложению
@@ -297,6 +298,7 @@ def do_here(names: list[str]) -> None:
         git("clone", "-q", address, str(target))
         sign_clone(target)
         print(f"работа склонирована: {target}")
+        podtyanut_vlozhennye(target)
         return
     sign_clone(target)
     old_url = git("config", "--get", "remote.origin.url", cwd=target, quiet=True)
@@ -320,6 +322,56 @@ def do_here(names: list[str]) -> None:
     else:
         print(f"работа обновлена: {target}")
         print(git("--no-pager", "diff", "--stat", f"{was}..{became}", cwd=target))
+    podtyanut_vlozhennye(target)
+
+
+def vlozhennye(target: Path) -> list[str]:
+    """Имена вложенных репозиториев работы: код и статья, если они подключены."""
+    modules = target / ".gitmodules"
+    if not modules.is_file():
+        return []
+    return re.findall(r'^\[submodule "(.+?)"\]', modules.read_text(encoding="utf-8",
+                                                                    errors="replace"), re.M)
+
+
+def podtyanut_vlozhennye(target: Path) -> None:
+    """Обновить код и статью работы до свежего состояния их собственных репозиториев.
+
+    Код и рукопись живут не в базе, а у себя: форк OLMo на GitHub, рабочий репозиторий на
+    чужом GitLab, проект Overleaf. Подключены они вложенными репозиториями (submodule), и
+    `--remote` тянет не записанный коммит, а вершину их ветки — иначе «обновить» означало бы
+    «вернуться к тому, что записали в прошлый раз».
+
+    Каждый обновляется по отдельности нарочно. `git submodule update` на первой же ошибке
+    бросает остальные, а у работы может быть и открытый код, и закрытый: нет доступа к
+    одному — это не повод не обновить второй. Владелец 12-10-2026: «все должно работать
+    хорошо и 1 командой все обновляться сразу».
+    """
+    names = vlozhennye(target)
+    if not names:
+        return
+    subprocess.run(["git", "submodule", "sync", "--quiet", "--recursive"],
+                   cwd=target, capture_output=True, text=True, env=environment())
+    for name in names:
+        was = git("rev-parse", f"HEAD:{name}", cwd=target, quiet=True) or ""
+        # Пустая папка до подтягивания: сравнение коммитов тут соврёт «без изменений»,
+        # потому что записанный коммит и выданный совпадают, а файлов на диске не было.
+        bylo_pusto = not any((target / name).iterdir()) if (target / name).is_dir() else True
+        done = subprocess.run(
+            ["git", "submodule", "update", "--init", "--remote", "--recursive", "--", name],
+            cwd=target, capture_output=True, text=True, env=environment())
+        if done.returncode != 0:
+            why = (done.stderr or done.stdout).strip().splitlines()
+            print(f"  {name}: не достать — {why[-1][:120] if why else 'причина не названа'}")
+            continue
+        became = git("-C", name, "rev-parse", "HEAD", cwd=target, quiet=True) or ""
+        skolko = sum(1 for _ in (target / name).rglob("*") if _.is_file())
+        if bylo_pusto:
+            print(f"  {name}: подтянут, {skolko} файлов, коммит {became[:12]}")
+        elif became and was[:12] != became[:12]:
+            print(f"  {name}: обновлён до {became[:12]}")
+        else:
+            print(f"  {name}: без изменений")
 
 
 def my_proposal(project: dict, branch: str) -> dict | None:
@@ -342,6 +394,9 @@ def do_pull() -> None:
     else:
         print(f"{project['path']}: изменилось с прошлого раза")
         print(git("--no-pager", "diff", "--stat", f"{was}..{became}", cwd=root))
+    if vlozhennye(root):
+        print(f"{project['path']}: код и статья работы")
+        podtyanut_vlozhennye(root)
     opened = api(f"projects/{project['id']}/merge_requests?state=opened&per_page=100") or []
     if opened:
         print("открытые предложения этой работы:")
