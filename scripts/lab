@@ -477,9 +477,17 @@ def discussions(project: dict, number: int) -> tuple[list, list]:
         notes = [note for note in (thread.get("notes") or []) if not note.get("system")]
         if not notes:
             continue
-        if "Проверка базы" in (notes[0].get("body") or ""):
+        pervaya = notes[0]
+        telo = pervaya.get("body") or ""
+        if "Проверка базы" in telo or "Суждение о прозе" in telo:
             continue
-        (closed if notes[0].get("resolved") else open_threads).append(notes)
+        # Нить, которую GitLab не даёт снять (`resolvable: false`), не может быть «не
+        # снятой»: её вердикт живёт в статусе коммита, а не в ней. 14-10-2026 из-за этого
+        # `lab checks` печатал «замечаний, которые надо снять: 1» у предложений с обоими
+        # зелёными воротами, и агенты работ принимали это за устаревший вердикт.
+        if not pervaya.get("resolvable", True):
+            continue
+        (closed if pervaya.get("resolved") else open_threads).append(notes)
     return open_threads, closed
 
 
