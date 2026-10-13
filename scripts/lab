@@ -404,6 +404,23 @@ def do_pull() -> None:
             print(f"  !{proposal['iid']}  {proposal.get('source_branch','')}  {proposal.get('title','')[:60]}")
 
 
+def svezhie(statuses: list) -> list:
+    """По одной записи на имя ворот — самая свежая.
+
+    GitLab хранит ВСЮ историю статусов коммита, и повторная проверка (`pr_watch --again`)
+    добавляет запись, а не заменяет её. 14-10-2026 из-за этого `lab checks` двадцать минут
+    печатал замечания, которых уже не было: по тому же коммиту рядом лежали старый
+    `failed` и новый `success`, печатались оба, и общий вердикт считался красным.
+    """
+    svezhee: dict = {}
+    for line in statuses:
+        imya = line.get("name") or line.get("context", "")
+        kogda = (line.get("finished_at") or line.get("created_at") or "", line.get("id") or 0)
+        if imya not in svezhee or kogda > svezhee[imya][0]:
+            svezhee[imya] = (kogda, line)
+    return [para[1] for para in svezhee.values()]
+
+
 def show_checks(project: dict, number: int, sha: str, *, wait_for: int = 0) -> None:
     """Вердикт проверок и последнее слово обсуждения.
 
@@ -414,7 +431,8 @@ def show_checks(project: dict, number: int, sha: str, *, wait_for: int = 0) -> N
     limit = time.monotonic() + wait_for
     statuses: list = []
     while True:
-        statuses = api(f"projects/{project['id']}/repository/commits/{sha}/statuses") or []
+        statuses = svezhie(
+            api(f"projects/{project['id']}/repository/commits/{sha}/statuses") or [])
         alive = [line for line in statuses if line.get("status") not in ("pending", "running")]
         if alive or time.monotonic() >= limit:
             statuses = alive or statuses
