@@ -121,11 +121,24 @@ INSIDE_LAB = {
                 "a pipeline is wired, a trap anyone would hit.",
     "journal": "The way the laboratory WORKS changed: a new rule, a new place, a cancelled "
                "rule, a tool switched off or replaced.",
-    "grants": "A grant: its application, its report, a commitment or deadline under it.",
+    #: Отсечка «чем это НЕ является» добавлена 13-10-2026 и не угадана, а замерена. Вопрос
+    #: говорил, что грант такое, и ни слова о том, чем он не является, поэтому классификатор
+    #: растягивал «грант» на любой ход с обязательствами и сроками: за сутки 120 решений дали
+    #: медиану 0.65 и 98 случаев в полосе 0.6-0.8, то есть он отвечал ДА. Владелец: «у гранта
+    #: вообще не должно быть 0.51, там должно быть 0.01». Замер на трёх типичных ходах (теория,
+    #: замер, починка): 0.71/0.59/0.53 при старой формулировке и 0.12/0.10/0.10 при этой.
+    #: Отдельно проверено, что убрать из текста слова про обязательство и срок НЕ помогает
+    #: (0.69/0.67/0.61): помогает только явный запрет.
+    "grants": ("A grant: its application, its report, or an obligation owed to the FUNDING "
+               "BODY under a specific named grant. An internal deadline, a run that must "
+               "finish, a gate that must pass or a promise inside the team is NOT a grant."),
     "management": "An obligation to an OUTSIDE party: a customer, a stage, an acceptance, "
                   "intellectual property paperwork, a report owed to someone.",
-    "education": "Students and courses: who does what, what was handed over, what was "
-                 "agreed with a student.",
+    #: Та же отсечка и по той же причине: на теоретическом ходе вопрос давал 0.51, то есть
+    #: попадал в полосу, которую пропускает удержание. С запретом 0.36.
+    "education": ("Students and courses: who does what, what was handed over, what was agreed "
+                  "WITH A NAMED STUDENT. Explaining something to the owner or to another agent "
+                  "is NOT this."),
     "communications": "Public text: an announcement, a post, a talk, anything that will be "
                       "read outside the laboratory.",
 }
