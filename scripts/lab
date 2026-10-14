@@ -36,6 +36,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import ssl
 import subprocess
 import sys
 import time
@@ -117,6 +118,18 @@ def api(path: str, *, method: str = "GET", payload: dict | None = None,
             return None
         sys.exit(f"GitLab ответил {trouble.code}: "
                  f"{trouble.read().decode('utf-8', 'replace')[:300]}")
+    except (urllib.error.URLError, TimeoutError, ssl.SSLError, OSError) as trouble:
+        # Разговора не было: сеть, таймаут, рукопожатие. Прежде такое улетало трассировкой,
+        # и 14-10-2026 агент `latent-grpo` на ней сорвал два своих сторожа — его опрос
+        # искал в выводе слово `failed`, а оно встречалось в тексте самой ошибки ssl, а не
+        # в вердикте ворот. Поэтому здесь: отдельный код выхода 3 и фраза, в которой слов
+        # вердикта нет вовсе. Красное от «не дозвонился» должно отличаться кодом, а не
+        # разбором слов.
+        if quiet:
+            return None
+        print(f"до базы не дозвонился: {type(trouble).__name__} — {trouble}",
+              file=sys.stderr)
+        raise SystemExit(3)
     return json.loads(text) if text.strip() else None
 
 
