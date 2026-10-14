@@ -205,10 +205,22 @@ def setup_key() -> None:
                    capture_output=True, env=environment())
 
 
-def find_project(slug: str) -> dict:
-    """Проект работы по её слагу. Полный путь знать не надо, он ищется."""
+def find_project(slug: str, full_path: str = "") -> dict:
+    """Проект работы по её слагу. Полный путь знать не надо, он ищется.
+
+    Но если он известен — например, взят из адреса `origin` клона, — он и решает: имя
+    работы в группе не уникально. 14-10-2026 агент работы не смог прочесть вердикт в
+    клоне `lora-muon`, потому что по слагу находятся два проекта (работа в
+    `low-rank/low-rank-step-geometry` и ярлык в `matrix-optimization/muon-sign-methods`),
+    команда выходила со словами «таких несколько, скажи полный путь», а сказать его было
+    нечем.
+    """
     similar = api(f"projects?search={slug}&simple=true&per_page=100") or []
     exact = [project_item for project_item in similar if project_item["path"] == slug]
+    if full_path:
+        by_path = [one for one in exact if one["path_with_namespace"] == full_path]
+        if by_path:
+            return by_path[0]
     if not exact:
         # «Не видно» у работы почти всегда значит «нет доступа», а не «нет такой»: работы
         # закрыты, и у не-участника они не отличаются от несуществующих. Сказать это надо
@@ -241,7 +253,14 @@ def here() -> tuple[dict, Path]:
     address = git("config", "--get", "remote.origin.url", cwd=path, quiet=True)
     slug = (address.rstrip("/").rsplit("/", 1)[-1].removesuffix(".git")
             if address else path.name)
-    return find_project(slug), path
+    # Полный путь из адреса `origin` — он решает спор, когда слаг не уникален.
+    full_path = ""
+    if address:
+        hvost = address.removesuffix(".git").rstrip("/")
+        if "://" in hvost:
+            hvost = hvost.split("://", 1)[1]
+            full_path = hvost.split("/", 1)[1] if "/" in hvost else ""
+    return find_project(slug, full_path), path
 
 
 def project_root(start_from: Path | None = None) -> Path:
